@@ -691,6 +691,7 @@ a.hm-lnk{display:inline-block;text-decoration:none}
 <label class="f"><span>Name</span><input type="text" id="n" name="name" required autocomplete="name"></label>
 <label class="f"><span>Contact number</span><input type="tel" id="c" name="tel" required inputmode="tel" autocomplete="tel" pattern="[0-9+ \-]{10,15}" title="Enter a valid phone number"></label>
 <label class="f"><span>Batch</span><select id="b" name="batch" required><option value="">Select batch</option><option>PG</option><option>Faculty</option><option>2021</option><option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option></select></label>
+<label class="f" id="dept-wrap" hidden><span>Department (type or choose)</span><input type="text" id="dept" name="dept" list="department-options" placeholder="Type your department" maxlength="60" autocomplete="organization-title"><datalist id="department-options"><option value="Anatomy"></option><option value="Physiology"></option><option value="Biochemistry"></option><option value="Pharmacology"></option><option value="Pathology"></option><option value="Microbiology"></option><option value="Forensic Medicine"></option><option value="Community Medicine"></option><option value="General Medicine"></option><option value="Pediatrics"></option><option value="Dermatology"></option><option value="Psychiatry"></option><option value="Respiratory Medicine"></option><option value="General Surgery"></option><option value="Orthopedics"></option><option value="Ophthalmology"></option><option value="ENT"></option><option value="Obstetrics &amp; Gynecology"></option><option value="Anesthesiology"></option><option value="Radiology"></option><option value="Emergency Medicine"></option></datalist></label>
 <fieldset class="f szf"><legend class="vh">Size</legend><div class="szh"><span class="szt">Select Size</span><button type="button" class="szl" id="szl" aria-expanded="false" aria-controls="szc">Size Chart</button></div><div class="szg" id="size-options"><label class="sz"><input type="radio" name="size" value="M" required><i>M</i></label><label class="sz"><input type="radio" name="size" value="L"><i>L</i></label><label class="sz"><input type="radio" name="size" value="XL"><i>XL</i></label><label class="sz"><input type="radio" name="size" value="2XL"><i>2XL</i></label></div><div class="szc" id="szc" hidden></div></fieldset>
 <fieldset class="f" id="ctf"><legend id="ctlg">Custom text (+&#8377;60)</legend><div class="chips">
 <label><input type="radio" name="ct" value="Yes" required><i>Yes</i></label><label><input type="radio" name="ct" value="No"><i>No</i></label></div></fieldset>
@@ -820,6 +821,13 @@ function setup(){
  $('go1').textContent=nopay()?'Place order':'Continue to payment';
  $('dn').hidden=(cur.type!=='hoodie');
  if(!hc){tw.hidden=true;t.required=false;}
+ updateDepartmentField();
+}
+function updateDepartmentField(){
+ var showDept=$('b').value==='PG'||$('b').value==='Faculty';
+ $('dept-wrap').hidden=!showDept;
+ $('dept').required=showDept;
+ if(!showDept)$('dept').value='';
 }
 function open(p,btn){
  curKey=(btn&&btn.getAttribute('data-t')==='tee')?'tee':'hoodie';cur=CFG[curKey];prod=p;last=btn;$('op').textContent=p;f.reset();setup();tw.hidden=true;t.required=false;shot='';shotFile=null;sending=false;$('pc').textContent='Confirm payment';$('wait1').hidden=true;$('wait2').hidden=true;$('fe1').textContent='';data=null;
@@ -848,7 +856,9 @@ $('ox').addEventListener('click',close);
 ov.addEventListener('click',function(e){if(e.target===ov)close();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!ov.hidden)close();});
 f.addEventListener('change',function(e){
- if(e.target.name==='ct'){var y=e.target.value==='Yes';tw.hidden=!y;t.required=y;if(y)t.focus();upd();}});
+ if(e.target.name==='ct'){var y=e.target.value==='Yes';tw.hidden=!y;t.required=y;if(y)t.focus();upd();}
+ if(e.target.name==='batch'){updateDepartmentField();}
+});
 ['n','c','t'].forEach(function(i){$(i).addEventListener('input',function(){this.setCustomValidity('');});});
 var chosen=false,PK='hb_pending_v1';
 function keep(){try{localStorage.setItem(PK,JSON.stringify({p:prod,d:data,ty:curKey,t:Date.now()}));}catch(e){}}
@@ -870,8 +880,9 @@ f.addEventListener('submit',function(e){
  var digits=v('tel').replace(/\D/g,'');
  if(!v('name')){return bad($('n'),'Please enter your name.');}
  if(digits.length<10||digits.length>13){return bad($('c'),'Enter a valid phone number (10-13 digits).');}
+ if((v('batch')==='PG'||v('batch')==='Faculty')&&!v('dept')){return bad($('dept'),'Please enter your department.');}
  if(y&&!v('text')){return bad(t,'Please enter the text to print.');}
- data={product:prod,name:v('name'),tel:v('tel'),batch:v('batch'),size:v('size'),ct:y?'Yes':'No',text:y?v('text'):'',amount:amount()};
+ data={product:prod,name:v('name'),tel:v('tel'),batch:v('batch'),dept:v('dept'),size:v('size'),ct:y?'Yes':'No',text:y?v('text'):'',amount:amount()};
  keep();if(nopay()){go2();}else toPay();});
 $('pb').addEventListener('click',function(){show(0);});
 $('pv').addEventListener('error',function(){this.hidden=true;});
@@ -928,7 +939,7 @@ function shrink(file,cb){
 function post(mine,img,ok,fail){
  var ctl=window.AbortController?new AbortController():null,to=setTimeout(function(){if(ctl)ctl.abort();},45000);
  fetch(cur.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},signal:ctl?ctl.signal:undefined,
-  body:JSON.stringify({cid:mine.cid,type:cur.type,product:mine.product,name:mine.name,tel:mine.tel,batch:mine.batch,size:mine.size,ct:mine.ct,text:mine.text,shot:img,hp:''})})
+  body:JSON.stringify({cid:mine.cid,type:cur.type,product:mine.product,name:mine.name,tel:mine.tel,batch:mine.batch,dept:mine.dept||'',size:mine.size,ct:mine.ct,text:mine.text,shot:img,hp:''})})
  .then(function(r){return r.json();})
  .then(function(j){clearTimeout(to);if(data!==mine)return;if(j&&j.ok)ok(j);else fail('We could not save your order. Please try again.');})
  .catch(function(){clearTimeout(to);if(data!==mine)return;fail('Could not submit. Check your connection and try again - it will not create a duplicate order.');});}
