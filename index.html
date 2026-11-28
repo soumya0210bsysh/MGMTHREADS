@@ -531,6 +531,14 @@ a.hm-lnk{display:inline-block;text-decoration:none}
 .adm-row .cu{color:#f5d28a}
 .adm-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 10px}
 .adm-cv{display:block;width:100%;height:auto;border-radius:10px;background:#fff;margin:0 0 12px}
+.adm-ct{display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #343434;border-radius:14px;padding:10px 12px;margin:0 0 12px}
+.adm-ct span{color:var(--muted);font-size:.78rem;flex:none}
+.adm-ct b{flex:1;min-width:0;font-size:1.15rem;word-break:break-word;-webkit-user-select:all;user-select:all}
+.adm-flt{display:flex;gap:8px;margin:0 0 10px}
+.adm-flt .on{background:var(--ink);color:#111;border-color:var(--ink)}
+.adm-row .ok{color:#7ddc9a}
+.adm-acts .mk{flex-basis:100%}
+.adm-acts .mk.on{background:#1e1e1e;color:#7ddc9a;border:1px solid #2f5d3e}
 .adm-acts{display:flex;gap:10px;flex-wrap:wrap}
 .adm-acts .go{flex:1;margin:0;width:auto;min-width:130px}
 </style>
@@ -1109,13 +1117,15 @@ if(szl&&szc){
 <div id="adm-b" hidden>
 <h2>Order slip</h2><p class="for" id="adm-n">Pick an order.</p>
 <input class="adm-in" id="adm-q" type="text" placeholder="Search name, phone, order ID" autocomplete="off">
+<div class="adm-flt" id="adm-flt"><button type="button" class="sm on" data-f="todo">To print</button><button type="button" class="sm" data-f="done">Given</button><button type="button" class="sm" data-f="all">All</button></div>
 <div class="adm-list" id="adm-l"></div>
 </div>
 <div id="adm-c" hidden>
 <div class="adm-top"><button class="sm" type="button" id="adm-back">&larr; Orders</button><span class="for" id="adm-id" style="margin:0"></span></div>
+<div class="adm-ct" id="adm-ct" hidden><span>Custom text</span><b id="adm-ctv"></b><button class="sm" type="button" id="adm-cp">Copy</button></div>
 <canvas class="adm-cv" id="adm-cv" aria-label="Order slip preview"></canvas>
 <p class="adm-err" id="adm-e2" role="alert"></p>
-<div class="adm-acts"><button class="btn go" type="button" id="adm-dl">Download PDF</button><button class="btn go" type="button" id="adm-sh" hidden>Share</button></div>
+<div class="adm-acts"><button class="btn go mk" type="button" id="adm-mk">Mark as given for print</button><button class="btn go" type="button" id="adm-dl">Download PDF</button><button class="btn go" type="button" id="adm-sh" hidden>Share</button></div>
 </div>
 </div></div>
 <script>
@@ -1125,7 +1135,7 @@ if(szl&&szc){
 var ORDERS_URL=window.HOODIE_URL;   /* hoodie sheet Apps Script /exec link */
 var MY_NUM='918224056131';              /* number the vendor should call (digits, with country code) */
 var d=document,$=function(i){return d.getElementById(i);};
-var box=$('adm'),pass='',orders=[],cur=null,blob=null,fname='',busy=false;
+var flt='todo',box=$('adm'),pass='',orders=[],cur=null,blob=null,fname='',busy=false;
 var W=1050,H=1488;                 /* A5 portrait at 180 dpi */
 function show(id){['adm-a','adm-b','adm-c'].forEach(function(k){$(k).hidden=(k!==id);});$('adm-x').parentNode.scrollTop=0;}
 function open(){box.hidden=false;d.body.style.overflow='hidden';if(pass&&orders.length){show('adm-b');render();}else{show('adm-a');$('adm-p').value='';$('adm-e').textContent='';setTimeout(function(){$('adm-p').focus();},30);}}
@@ -1153,42 +1163,70 @@ $('adm-f').addEventListener('submit',function(e){
  load(p,function(err,list){
   busy=false;$('adm-go').disabled=false;$('adm-go').textContent='Unlock';
   if(err){$('adm-e').textContent=err;return;}
-  pass=p;orders=list.map(norm);$('adm-p').value='';show('adm-b');$('adm-q').value='';render();
+  pass=p;orders=list.map(norm);orders.forEach(function(o){if(o.id&&G[o.id])o.done=G[o.id];});$('adm-p').value='';show('adm-b');$('adm-q').value='';render();
  });
 });
 
 /* ---- read sheet rows whatever the column headings are ---- */
-function pick(o,re,not){for(var k in o){var n=k.toLowerCase().replace(/[^a-z0-9]/g,'');if(re.test(n)&&!(not&&not.test(n))){var v=o[k];return String(v==null?'':v).trim();}}return '';}
+function pick(o,re,not,not2){for(var k in o){var n=k.toLowerCase().replace(/[^a-z0-9]/g,'');if(re.test(n)&&!(not&&not.test(n))&&!(not2&&not2.test(n))){var v=o[k];return String(v==null?'':v).trim();}}return '';}
+function plabel(p){
+ var m=/^\s*0*(\d{1,3})\s*$/.exec(p||'');if(!m)return p;
+ var id=('00'+m[1]).slice(-3),bt=d.querySelector('#p-hoodie-'+id+' .buy[data-p]');
+ return bt?bt.getAttribute('data-p'):'Design '+id;
+}
 function norm(o){
  var r={id:pick(o,/^(cid|orderid|oid|id|order|ordernumber|orderno)$/),when:pick(o,/time|date|when/),product:pick(o,/product|design|item/),
   name:pick(o,/^(name|customer|customername|fullname)$/),tel:pick(o,/tel|phone|mobile|contact|whatsapp/),batch:pick(o,/batch/),dept:pick(o,/dept|department/),
-  size:pick(o,/size/),text:pick(o,/text|print/,/^ct$/)};
+  size:pick(o,/size/),text:pick(o,/text|print/,/^ct$/,/givenforprint/),done:''};
  var m=r.text.match(/^yes\s*[-:\u2013]\s*["\u201c]?(.*?)["\u201d]?$/i);if(m)r.text=m[1];
  if(/^(no|none|n\/a|-|\u2014)?$/i.test(r.text))r.text='';
+ r.product=plabel(r.product);
  return r;
 }
 function render(){
  var q=$('adm-q').value.trim().toLowerCase(),l=$('adm-l'),n=0;
  l.innerHTML='';
  orders.forEach(function(o){
+  if(flt==='todo'&&o.done)return;if(flt==='done'&&!o.done)return;
   if(q&&(o.name+' '+o.tel+' '+o.id+' '+o.product+' '+o.batch).toLowerCase().indexOf(q)<0)return;
   if(n>=100)return;n++;
   var b=d.createElement('button');b.type='button';b.className='adm-row';
   var t=d.createElement('b');t.textContent=(o.name||'(no name)')+' \u2014 '+(o.size||'?');
   var s=d.createElement('small');s.textContent=(o.product||'Hoodie')+(o.id?' \u00b7 '+o.id:'');
   b.appendChild(t);b.appendChild(s);
+  if(o.done){var g=d.createElement('small');g.className='ok';g.textContent='\u2713 Given for print \u00b7 '+o.done;b.appendChild(g);}
   if(o.text){var c=d.createElement('small');c.className='cu';c.textContent='Custom text: '+o.text;b.appendChild(c);}
   b.addEventListener('click',function(){pickOrder(o);});
   l.appendChild(b);
  });
- $('adm-n').textContent=orders.length?(n?'Tap an order to make its slip.':'No match.'):'No orders found in the sheet yet.';
+ $('adm-n').textContent=orders.length?(n?'Tap an order to make its slip.':(flt==='todo'?'Nothing left to print.':'No match.')):'No orders found in the sheet yet.';
 }
 $('adm-q').addEventListener('input',render);
+$('adm-flt').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;flt=b.getAttribute('data-f');[].forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});render();});
+function setMk(){var b=$('adm-mk'),on=!!(cur&&cur.done);b.classList.toggle('on',on);b.textContent=on?'\u2713 Given for print \u2014 tap to undo':'Mark as given for print';b.disabled=!(cur&&cur.id);}
+var GK='adm_given_v1',G={};
+try{G=JSON.parse(localStorage.getItem(GK)||'{}')||{};}catch(e){G={};}
+function saveG(){try{localStorage.setItem(GK,JSON.stringify(G));}catch(e){}}
+function stamp(){try{return new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});}catch(e){return new Date().toString();}}
+$('adm-mk').addEventListener('click',function(){
+ if(!cur||!cur.id)return;
+ if(cur.done){delete G[cur.id];cur.done='';}else{cur.done=stamp();G[cur.id]=cur.done;}
+ saveG();setMk();
+});
 
 /* ---- mockup photos from the product page ---- */
 function photos(product){
- var m=String(product).match(/Design\s+([0-9A-Za-z]+)/i);if(!m)return [];
- var all=[].slice.call(d.querySelectorAll('#p-hoodie-'+m[1].toLowerCase()+' .th img')).filter(function(i){return i.src;});
+ var p=String(product||''),sec='',m=p.match(/(\d{1,3})/);
+ if(m){var id=('00'+parseInt(m[1],10)).slice(-3);if(d.getElementById('p-hoodie-'+id))sec='p-hoodie-'+id;}
+ if(!sec){
+  var low=p.toLowerCase().replace(/\s+/g,' ').trim();
+  [].slice.call(d.querySelectorAll('[id^="p-hoodie-"] .buy[data-p]')).forEach(function(bt){
+   var n=bt.getAttribute('data-p').toLowerCase();
+   if(!sec&&low&&(n===low||n.indexOf(low)>-1||low.indexOf(n)>-1))sec=bt.closest('section').id;
+  });
+ }
+ if(!sec)return [];
+ var all=[].slice.call(d.querySelectorAll('#'+sec+' .th img')).filter(function(i){return i.src;});
  return all.slice(0,3).map(function(i){return {src:i.src,label:''};});
 }
 function loadImg(src){return new Promise(function(res){var im=new Image();im.onload=function(){res(im);};im.onerror=function(){res(null);};im.src=src;});}
@@ -1214,7 +1252,7 @@ function contain(c,im,x,y,w,h){
 }
 function fmtNum(n){return '+'+String(n).replace(/\D/g,'').replace(/^(\d{2})(\d{5})(\d+)$/,'$1 $2 $3');}
 function draw(o,imgs,cv){
- cv.width=W;cv.height=H;var c=cv.getContext('2d');
+ cv.width=W;cv.height=H;var c=cv.getContext('2d'),texts=[];
  c.fillStyle='#fff';c.fillRect(0,0,W,H);c.textBaseline='alphabetic';
  /* header */
  c.fillStyle='#111';c.fillRect(0,0,W,150);
@@ -1244,7 +1282,7 @@ function draw(o,imgs,cv){
   c.lineWidth=5;c.strokeStyle='#111';c.setLineDash([]);rr(c,48,cy,W-96,ch,18);c.stroke();
   c.fillStyle='#fff';c.fillRect(70,cy-16,230,30);c.fillStyle='#111';c.font='800 22px '+F;c.fillText('CUSTOM TEXT',78,cy+6);
   var tf=fit(c,o.text,W-96-48,ch-92,76,32,'900');c.fillStyle='#111';c.font='900 '+tf.size+'px '+F;c.textAlign='center';
-  var ty=cy+34+tf.size;tf.lines.forEach(function(L,i){c.fillText(L,W/2,ty+i*tf.size*1.15);});c.textAlign='left';
+  var ty=cy+34+tf.size;tf.lines.forEach(function(L,i){c.fillText(L,W/2,ty+i*tf.size*1.15);var dw=c.measureText(L).width,keep=c.font;c.font='bold '+tf.size+'px Arial,Helvetica,sans-serif';var aw=c.measureText(L).width;c.font=keep;texts.push({t:L,x:W/2-dw/2,y:ty+i*tf.size*1.15,s:tf.size,tz:aw?dw/aw*100:100});});c.textAlign='left';
   c.fillStyle='#555';c.font='600 22px '+F;c.fillText('Print on left chest, below the emblem.',72,cy+ch-20);
  }else{
   c.lineWidth=2;c.strokeStyle='#aaa';c.setLineDash([10,8]);rr(c,48,cy,W-96,ch-80,18);c.stroke();c.setLineDash([]);
@@ -1261,7 +1299,7 @@ function draw(o,imgs,cv){
    if(it.im){c.save();rr(c,gx,gy,gw,gh,16);c.clip();contain(c,it.im,gx+8,gy+8,gw-16,gh-16);c.restore();}
    
   });
- }else{c.fillStyle='#f1f1ef';rr(c,48,gy,W-96,gh,16);c.fill();c.fillStyle='#777';c.font='600 26px '+F;c.textAlign='center';c.fillText('No mockup photo available for this design',W/2,gy+gh/2);c.textAlign='left';}
+ }else{c.fillStyle='#f1f1ef';rr(c,48,gy,W-96,gh,16);c.fill();c.fillStyle='#777';c.font='600 26px '+F;c.textAlign='center';c.fillText('No mockup photo found for "'+String(o.product||'?').slice(0,40)+'"',W/2,gy+gh/2);c.textAlign='left';}
  /* order for */
  var who=(o.name||'')+(o.batch?'  \u00b7  '+o.batch:'')+(o.dept?' ('+o.dept+')':'');
  c.fillStyle='#777';c.font='700 20px '+F;c.fillText('ORDER FOR',48,1284);
@@ -1270,12 +1308,13 @@ function draw(o,imgs,cv){
  c.fillStyle='#111';c.fillRect(0,1348,W,H-1348);
  c.fillStyle='#bbb';c.font='700 26px '+F;c.fillText('WHEN READY, PLEASE CALL',48,1405);
  c.fillStyle='#fff';c.font='900 76px '+F;c.fillText(fmtNum(MY_NUM),48,1480-18);
+ return texts;
 }
 function line(c,y){c.strokeStyle='#ddd';c.lineWidth=2;c.beginPath();c.moveTo(48,y);c.lineTo(W-48,y);c.stroke();}
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
 
 /* ---- tiny PDF writer: one A5 page holding the slip as a JPEG ---- */
-function pdfFromCanvas(cv){
+function pdfFromCanvas(cv,texts){
  var b64=cv.toDataURL('image/jpeg',.92).split(',')[1],bin=atob(b64),jpg=new Uint8Array(bin.length),i;
  for(i=0;i<bin.length;i++)jpg[i]=bin.charCodeAt(i);
  var enc=new TextEncoder(),parts=[],off=[],len=0,PW=419.53,PH=595.28;
@@ -1284,24 +1323,30 @@ function pdfFromCanvas(cv){
  add('%PDF-1.4\n');
  obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
  obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
- obj(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+ obj(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /XObject << /Im0 4 0 R >> /Font << /F1 6 0 R >> >> /Contents 5 0 R >>');
  off[4]=len;add('4 0 obj\n<< /Type /XObject /Subtype /Image /Width '+cv.width+' /Height '+cv.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpg.length+' >>\nstream\n');add(jpg);add('\nendstream\nendobj\n');
- var cs='q '+PW+' 0 0 '+PH+' 0 0 cm /Im0 Do Q';
+ var cs='q '+PW+' 0 0 '+PH+' 0 0 cm /Im0 Do Q',k=PW/cv.width;
+ (texts||[]).forEach(function(t){
+  var a=t.t.replace(/[^\x20-\x7e]/g,'').replace(/([\\()])/g,'\\$1');if(!a.trim())return;
+  cs+='\nBT /F1 '+(t.s*k).toFixed(2)+' Tf 3 Tr '+t.tz.toFixed(1)+' Tz 1 0 0 1 '+(t.x*k).toFixed(2)+' '+(PH-t.y*k).toFixed(2)+' Tm ('+a+') Tj ET';
+ });
  obj(5,'<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream');
- var xr=len,x='xref\n0 6\n0000000000 65535 f \n';
- for(i=1;i<=5;i++)x+=('0000000000'+off[i]).slice(-10)+' 00000 n \n';
- add(x+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+xr+'\n%%EOF');
+ obj(6,'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+ var xr=len,x='xref\n0 7\n0000000000 65535 f \n';
+ for(i=1;i<=6;i++)x+=('0000000000'+off[i]).slice(-10)+' 00000 n \n';
+ add(x+'trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n'+xr+'\n%%EOF');
  return new Blob(parts,{type:'application/pdf'});
 }
 
 function pickOrder(o){
  cur=o;blob=null;$('adm-e2').textContent='';$('adm-id').textContent=o.id||'';show('adm-c');
+ setMk();$('adm-ct').hidden=!o.text;$('adm-ctv').textContent=o.text||'';$('adm-cp').textContent='Copy';
  $('adm-dl').disabled=true;$('adm-sh').disabled=true;
  var ph=photos(o.product);
  Promise.all(ph.map(function(p){return loadImg(p.src);})).then(function(ims){
   var imgs=ph.map(function(p,i){return {label:p.label,im:ims[i]};}).filter(function(x){return x.im;});
-  var cv=$('adm-cv');draw(o,imgs,cv);
-  try{blob=pdfFromCanvas(cv);}catch(e){$('adm-e2').textContent='Could not build the PDF on this device.';return;}
+  var cv=$('adm-cv'),tx=draw(o,imgs,cv);
+  try{blob=pdfFromCanvas(cv,tx);}catch(e){$('adm-e2').textContent='Could not build the PDF on this device.';return;}
   fname='Order-slip-'+(o.id||'order').replace(/[^A-Za-z0-9_-]/g,'')+'.pdf';
   $('adm-dl').disabled=false;
   var f=new File([blob],fname,{type:'application/pdf'});
@@ -1309,7 +1354,12 @@ function pickOrder(o){
   $('adm-sh').hidden=!can;$('adm-sh').disabled=!can;
  });
 }
-$('adm-back').addEventListener('click',function(){show('adm-b');});
+$('adm-cp').addEventListener('click',function(){
+ var b=this,t=cur&&cur.text||'',ok=function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy';},1400);};
+ try{navigator.clipboard.writeText(t).then(ok,function(){fb();});}catch(e){fb();}
+ function fb(){var x=d.createElement('textarea');x.value=t;x.style.position='fixed';x.style.opacity='0';d.body.appendChild(x);x.select();try{d.execCommand('copy');ok();}catch(e){}x.remove();}
+});
+$('adm-back').addEventListener('click',function(){show('adm-b');render();});
 $('adm-dl').addEventListener('click',function(){
  if(!blob)return;var u=URL.createObjectURL(blob),a=d.createElement('a');a.href=u;a.download=fname;d.body.appendChild(a);a.click();a.remove();
  setTimeout(function(){URL.revokeObjectURL(u);},4000);
